@@ -28,7 +28,7 @@ import pyaudio
 import soundfile
 
 from porcupine import Porcupine
-
+from ThermalPrinter import Adafruit_Thermal
 
 class PorcupineDemo(Thread):
     """
@@ -68,6 +68,9 @@ class PorcupineDemo(Thread):
         self._output_path = output_path
         if self._output_path is not None:
             self._recorded_frames = []
+        # TODO: Set the serial port name with a constructor parameter
+        self._printer = Adafruit_Thermal("COM3", 115200)
+        self._pendingPrint = False
 
     def run(self):
         """
@@ -86,6 +89,8 @@ class PorcupineDemo(Thread):
                     # add your own code execution here ... it will not block the recognition
                 elif num_keywords > 1 and result >= 0:
                     print('[%s] detected %s' % (str(datetime.now()), self._keywords[result]))
+                    if result == 0:
+                        self._pendingPrint = True
                     # or add it here if you use multiple keywords
 
                 if self._output_path is not None:
@@ -133,6 +138,10 @@ class PorcupineDemo(Thread):
             print("Waiting for keywords ...\n")
 
             while True:
+                if self._pendingPrint is True:
+                    self._pendingPrint = False
+                    self._printer.printImage('gfx/paint.png', LaaT=True, reverse = False, rotate=True, auto_resize = True)
+                    self._printer.feed(2)
                 time.sleep(0.1)
 
         except KeyboardInterrupt:
