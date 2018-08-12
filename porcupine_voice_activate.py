@@ -30,6 +30,11 @@ import soundfile
 from porcupine import Porcupine
 from ThermalPrinter import Adafruit_Thermal
 
+import cv2 # For webcam
+from image_processor import ImageProcessor
+from drawing_dataset import DrawingDataset
+from sketch import SketchGizeh
+from PIL import Image
 class PorcupineDemo(Thread):
     """
     Demo class for wake word detection (aka Porcupine) library. It creates an input audio stream from a microphone,
@@ -37,7 +42,9 @@ class PorcupineDemo(Thread):
     console. It optionally saves the recorded audio into a file for further review.
     This is the non-blocking version that uses the callback function of PyAudio.
     """
-
+    # Set up camera constants
+    IM_WIDTH = 640
+    IM_HEIGHT = 480
     def __init__(
             self,
             library_path,
@@ -69,8 +76,13 @@ class PorcupineDemo(Thread):
         if self._output_path is not None:
             self._recorded_frames = []
         # TODO: Set the serial port name with a constructor parameter
-        self._printer = Adafruit_Thermal("COM3", 115200)
+        self._printer = Adafruit_Thermal("/dev/ttyUSB0", 115200)
         self._pendingPrint = False
+        self.detect = ImageProcessor()
+        self.detect.setup()
+        self.dataset = DrawingDataset('./data/quick_draw_pickles/', './data/label_mapping.jsonl')
+        self.dataset.setup()
+        self.sk = SketchGizeh()
 
     def run(self):
         """
@@ -139,9 +151,8 @@ class PorcupineDemo(Thread):
 
             while True:
                 if self._pendingPrint is True:
+                    self.run_camera()
                     self._pendingPrint = False
-                    self._printer.printImage('gfx/paint.png', LaaT=True, reverse = False, rotate=True, auto_resize = True)
-                    self._printer.feed(2)
                 time.sleep(0.1)
 
         except KeyboardInterrupt:
@@ -161,6 +172,41 @@ class PorcupineDemo(Thread):
             if self._output_path is not None and sample_rate is not None and len(self._recorded_frames) > 0:
                 recorded_audio = np.concatenate(self._recorded_frames, axis=0).astype(np.int16)
                 soundfile.write(self._output_path, recorded_audio, samplerate=sample_rate, subtype='PCM_16')
+
+    def run_camera(self):
+        camera = cv2.VideoCapture(0)
+        if ((camera == None) or (not camera.isOpened())):
+            print('\n\n')
+            print('Error - could not open video device.')
+            print('\n\n')
+            exit(0)
+        ret = camera.set(cv2.CAP_PROP_FRAME_WIDTH,self.IM_WIDTH)
+        ret = camera.set(cv2.CAP_PROP_FRAME_HEIGHT,self.IM_HEIGHT)
+        # save the actual dimensions
+        actual_video_width = camera.get(cv2.CAP_PROP_FRAME_WIDTH)
+        actual_video_height = camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        print('actual video resolution: ' + str(actual_video_width) + ' x ' + str(actual_video_height))
+        frame_count = 0
+        while(True):
+            for i in range(5):
+                camera.grab()
+            ret, frame = camera.read()
+            frame_count += 1
+            (boxes, scores, classes, num) = self.detect.detect(frame)
+            self.sk.setup()
+            drawn_objects = self.sk.draw_object_recognition_results(np.squeeze(boxes),
+                                            np.squeeze(classes).astype(np.int32),
+                                            np.squeeze(scores),
+                                            self.detect.labels,
+                                            self.dataset)
+            print('frame:', frame_count)
+            if len(drawn_objects) > 0:
+                camera.release()
+                print(drawn_objects)
+                img = Image.fromarray(self.sk.get_npimage())
+                self._printer.printImage(img, LaaT=True, reverse = False, rotate=True, auto_resize = True)
+                self._printer.feed(2)
+                break
 
     _AUDIO_DEVICE_INFO_KEYS = ['index', 'name', 'defaultSampleRate', 'maxInputChannels']
 

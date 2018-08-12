@@ -29,7 +29,7 @@ class DrawingDataset(object):
         self._categories = self.load_categories(self._path)
 
     def load_categories(self, path):
-        files = Path(path).glob('*.bin')
+        files = Path(path).glob('*.p')
         categories = [f.stem for f in files]
         return categories
 
