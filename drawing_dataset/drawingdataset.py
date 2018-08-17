@@ -40,14 +40,18 @@ class DrawingDataset(object):
             if name not in self._categories:
                 # try and get the closest matching drawing. If nothing suitable foumd then return a scorpion
                 name = self._category_mapping.get(name, 'scorpion')
-            if index < 1 or index >= 100 or not isinstance(index, int):
-                raise ValueError('index', index, ';index must be integer > 0 and < 100')
+            if index < 0 or index >= 100 or not isinstance(index, int):
+                raise ValueError('index', index, ';index must be integer >= 0 and < 100')
             pickleFile = str(self._path / Path(name).with_suffix('.p'))
             with open(pickleFile,'rb') as f:
-                image = pickle.load(f)[index]
-            return image
+                images = pickle.load(f)
+                if index < len(images):
+                    return images[index]
+                else:
+                    print('Drawing {} index {} out of range {}'.format(name, index, len(images)))
+                    return images[0]
         except ValueError as e:
-            self.log.exception(e)
+            self._logger.exception(e)
             raise e
             
     @property

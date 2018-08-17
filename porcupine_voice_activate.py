@@ -1,19 +1,3 @@
-#
-# Copyright 2018 Picovoice Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-
 import argparse
 import os
 import platform
@@ -35,6 +19,9 @@ from image_processor import ImageProcessor
 from drawing_dataset import DrawingDataset
 from sketch import SketchGizeh
 from PIL import Image
+
+from raspberry_io import RaspberryIO
+
 class PorcupineDemo(Thread):
     """
     Demo class for wake word detection (aka Porcupine) library. It creates an input audio stream from a microphone,
@@ -51,7 +38,10 @@ class PorcupineDemo(Thread):
             keywords = None,
             sensitivity=0.5,
             input_device_index=None,
-            output_path=None):
+            output_path=None,
+            printer_serial_port = "/dev/ttyUSB0",
+            printer_baudrate = 115200,
+            ):
 
         """
         Constructor.
@@ -65,6 +55,9 @@ class PorcupineDemo(Thread):
         """
 
         super(PorcupineDemo, self).__init__()
+        self.io = RaspberryIO()
+        # Blink LED fast to show the programming is loading.
+        self.io.led_blink_fast()
         if input_device_index is None:
             input_device_index = self.locate_usb_audio_device()
         self._library_path = library_path
@@ -75,8 +68,8 @@ class PorcupineDemo(Thread):
         self._output_path = output_path
         if self._output_path is not None:
             self._recorded_frames = []
-        # TODO: Set the serial port name with a constructor parameter
-        self._printer = Adafruit_Thermal("/dev/ttyUSB0", 115200)
+            
+        self._printer = Adafruit_Thermal(printer_serial_port, printer_baudrate)
         self._pendingPrint = False
         self.detect = ImageProcessor()
         self.detect.setup()
@@ -148,16 +141,22 @@ class PorcupineDemo(Thread):
             print("Frame-length: %d" % frame_length)
             print("Keywords: %s" % self._keywords)
             print("Waiting for keywords ...\n")
-
+            # Pulse LED to show the Pi is ready for voice command.
+            self.io.led_pulse()
             while True:
                 if self._pendingPrint is True:
+                    # LED on to show the Pi is taking photos.
+                    self.io.led_on()
                     self.run_camera()
                     self._pendingPrint = False
+                    # Pulse LED to show the Pi is ready for voice command.
+                    self.io.led_pulse()
                 time.sleep(0.1)
 
         except KeyboardInterrupt:
             print('stopping ...')
         finally:
+            del self.io
             if audio_stream is not None:
                 audio_stream.stop_stream()
                 audio_stream.close()
@@ -193,6 +192,8 @@ class PorcupineDemo(Thread):
             ret, frame = camera.read()
             frame_count += 1
             (boxes, scores, classes, num) = self.detect.detect(frame)
+            # save image
+            cv2.imwrite('./image.jpg', frame)
             self.sk.setup()
             drawn_objects = self.sk.draw_object_recognition_results(np.squeeze(boxes),
                                             np.squeeze(classes).astype(np.int32),
