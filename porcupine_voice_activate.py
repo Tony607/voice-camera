@@ -55,7 +55,7 @@ class PorcupineDemo(Thread):
         """
 
         super(PorcupineDemo, self).__init__()
-        self.io = RaspberryIO()
+        self.io = RaspberryIO(callback=self.setPendingPrint)
         # Blink LED fast to show the programming is loading.
         self.io.led_blink_fast()
         if input_device_index is None:
@@ -171,6 +171,9 @@ class PorcupineDemo(Thread):
             if self._output_path is not None and sample_rate is not None and len(self._recorded_frames) > 0:
                 recorded_audio = np.concatenate(self._recorded_frames, axis=0).astype(np.int16)
                 soundfile.write(self._output_path, recorded_audio, samplerate=sample_rate, subtype='PCM_16')
+    
+    def setPendingPrint(self):
+        self._pendingPrint=True
 
     def run_camera(self):
         camera = cv2.VideoCapture(0)
@@ -193,7 +196,7 @@ class PorcupineDemo(Thread):
             frame_count += 1
             (boxes, scores, classes, num) = self.detect.detect(frame)
             # save image
-            cv2.imwrite('./image.jpg', frame)
+            # cv2.imwrite('./image.jpg', frame)
             self.sk.setup()
             drawn_objects = self.sk.draw_object_recognition_results(np.squeeze(boxes),
                                             np.squeeze(classes).astype(np.int32),
