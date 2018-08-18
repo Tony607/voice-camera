@@ -71,6 +71,7 @@ class PorcupineDemo(Thread):
             
         self._printer = Adafruit_Thermal(printer_serial_port, printer_baudrate)
         self._pendingPrint = False
+        self._pendingEdgePrint = False
         self.detect = ImageProcessor()
         self.detect.setup()
         self.dataset = DrawingDataset('./data/quick_draw_pickles/', './data/label_mapping.jsonl')
@@ -96,6 +97,8 @@ class PorcupineDemo(Thread):
                     print('[%s] detected %s' % (str(datetime.now()), self._keywords[result]))
                     if result == 0:
                         self._pendingPrint = True
+                    elif result == 1:
+                        self._pendingEdgePrint = True
                     # or add it here if you use multiple keywords
 
                 if self._output_path is not None:
@@ -151,6 +154,14 @@ class PorcupineDemo(Thread):
                     self._pendingPrint = False
                     # Pulse LED to show the Pi is ready for voice command.
                     self.io.led_pulse()
+                if self._pendingEdgePrint is True:
+                    # LED on to show the Pi is taking photos.
+                    self.io.led_on()
+                    self.run_edge_camera()
+                    self._pendingEdgePrint = False
+                    # Pulse LED to show the Pi is ready for voice command.
+                    self.io.led_pulse()
+
                 time.sleep(0.1)
 
         except KeyboardInterrupt:
@@ -211,6 +222,30 @@ class PorcupineDemo(Thread):
                 self._printer.printImage(img, LaaT=True, reverse = False, rotate=True, auto_resize = True)
                 self._printer.feed(2)
                 break
+
+    def run_edge_camera(self):
+        camera = cv2.VideoCapture(0)
+        if ((camera == None) or (not camera.isOpened())):
+            print('\n\n')
+            print('Error - could not open video device.')
+            print('\n\n')
+            exit(0)
+        ret = camera.set(cv2.CAP_PROP_FRAME_WIDTH,self.IM_WIDTH)
+        ret = camera.set(cv2.CAP_PROP_FRAME_HEIGHT,self.IM_HEIGHT)
+        # save the actual dimensions
+        actual_video_width = camera.get(cv2.CAP_PROP_FRAME_WIDTH)
+        actual_video_height = camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        print('actual video resolution: ' + str(actual_video_width) + ' x ' + str(actual_video_height))
+        for i in range(5):
+            camera.grab()
+        ret, frame = camera.read()
+        camera.release()
+        frame = cv2.Canny(frame,210, 100)
+        kernel = np.ones((2,2),np.uint8)
+        frame = cv2.dilate(frame,kernel,iterations = 2)
+        img = Image.fromarray(frame)
+        self._printer.printImage(img, LaaT=True, reverse = True, rotate=True, auto_resize = True)
+        self._printer.feed(2)
 
     _AUDIO_DEVICE_INFO_KEYS = ['index', 'name', 'defaultSampleRate', 'maxInputChannels']
 
