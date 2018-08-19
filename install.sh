@@ -1,5 +1,5 @@
 sudo apt update
-# Install dependencies for TensorFlow Object detection API
+# Install dependencies for TensorFlow Object detection API and OpenCV3
 sudo apt install -y libatlas-base-dev protobuf-compiler python-pil python-lxml python-tk libqtgui4 python-opencv
 # Install dependencies for Porcupine
 sudo apt install -y libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 ffmpeg libav-tools
